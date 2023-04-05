@@ -7,35 +7,37 @@
  */
 pragma solidity ^0.8.18;
 
-import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {SafeERC20} from '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
-import {ReentrancyGuard} from "@openzeppelin/contracts/security/ReentrancyGuard.sol";
-import {Pausable} from "@openzeppelin/contracts/security/Pausable.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {ReentrancyGuard} from '@openzeppelin/contracts/security/ReentrancyGuard.sol';
+import {Pausable} from '@openzeppelin/contracts/security/Pausable.sol';
+import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
+import {Math} from '@openzeppelin/contracts/utils/math/Math.sol';
 
 contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
     using SafeERC20 for IERC20;
 
-    uint256 constant MAGNITUDE_CONSTANT = 1e40;
+    uint256 public constant MAGNITUDE_CONSTANT = 1e40;
 
-    IERC20 stakingToken;
-    uint256 stakingTokenBalance;
-    uint256 minStakingAmount;
+    IERC20 public stakingToken;
+    uint256 public stakingTokenBalance;
+    uint256 public minStakingAmount;
 
-    IERC20 rewardToken;
-    uint256 rewardTokenBalance;
-    uint256 minRewardAmount;
+    IERC20 public rewardToken;
+    uint256 public rewardTokenBalance;
+    uint256 public minRewardAmount;
 
-    uint256 programStartsAt;
-    uint256 programEndsAt;
-    uint256 programRewardRemaining;
-    uint256 programRewardPerLiquidity;
-    uint256 programLastAccruedRewardsAt;
+    uint256 public programStartsAt;
+    uint256 public programEndsAt;
+    uint256 public programRewardLost;
+    uint256 public programRewardRemaining;
+    uint256 public programRewardPerLiquidity;
+    uint256 public programLastAccruedRewardsAt;
 
-    uint256 taxRatioNumerator;
-    uint256 taxRatioDenominator;
-    uint256 taxAccumulated;
+    uint256 public taxRatioNumerator;
+    uint256 public taxRatioDenominator;
+    uint256 public taxAccumulated;
 
     struct StakingUser {
         uint256 amountStaked;
@@ -44,7 +46,9 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
 
     mapping(address => StakingUser) users;
 
-    constructor(
+    constructor() {}
+
+    function initializeProgram(
         address _stakingToken,
         uint256 _minStakingAmount,
         address _rewardToken,
@@ -54,7 +58,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 _programEndsAt,
         uint256 _taxRatioNumerator,
         uint256 _taxRatioDenominator
-    ) {
+    ) external onlyOwner {
         _configureProgramTimeline(_programStartsAt, _programEndsAt, false);
         _configureProgramCondition(
             _stakingToken,
@@ -123,12 +127,10 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
      * Calculate a new rewards period for the current time, and calculate rewards based
      * on the next program reward per liquidity.
      */
-    function availableRewards()
-        external
-        view
-        returns (uint256 _userRewardsTaxed, uint256 _userTaxes)
-    {
-        uint256 _programNextAccruedRewardsAt = _min(
+    function availableRewards(
+        address user
+    ) external view returns (uint256 _userRewardsTaxed, uint256 _userTaxes) {
+        uint256 _programNextAccruedRewardsAt = Math.min(
             block.timestamp,
             programEndsAt
         );
@@ -139,8 +141,11 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 _rewardPeriodDuration = _programNextAccruedRewardsAt -
             programLastAccruedRewardsAt;
 
-        uint256 _rewardAmountForPeriod = (programRewardRemaining *
-            _rewardPeriodDuration) / _rewardRemainingDuration;
+        uint256 _rewardAmountForPeriod = Math.mulDiv(
+            programRewardRemaining,
+            _rewardPeriodDuration,
+            _rewardRemainingDuration
+        );
 
         uint256 _nextProgramRewardPerLiquidity = programRewardPerLiquidity;
 
@@ -149,14 +154,16 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
             _programNextAccruedRewardsAt < programEndsAt &&
             stakingTokenBalance > 0
         ) {
-            _nextProgramRewardPerLiquidity +=
-                (_rewardAmountForPeriod * MAGNITUDE_CONSTANT) /
-                stakingTokenBalance;
+            _nextProgramRewardPerLiquidity += Math.mulDiv(
+                _rewardAmountForPeriod,
+                MAGNITUDE_CONSTANT,
+                stakingTokenBalance
+            );
         }
 
         (_userRewardsTaxed, _userTaxes) = _calculateRewardsAndTaxes(
-            users[_msgSender()].lastProgramRewardPerLiquidity,
-            users[_msgSender()].amountStaked,
+            users[user].lastProgramRewardPerLiquidity,
+            users[user].amountStaked,
             _nextProgramRewardPerLiquidity,
             taxRatioNumerator,
             taxRatioDenominator
@@ -173,7 +180,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
     ) internal {
         require(
             block.timestamp < programEndsAt,
-            "Unable to configure program condition for finished program"
+            'Unable to configure program condition for finished program'
         );
 
         if (_accrueRewards) {
@@ -203,7 +210,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
 
             require(
                 _rewardAmountToTransfer <= rewardTokenBalance,
-                "Reward change is greater than available"
+                'Reward change is greater than available'
             );
 
             rewardToken.safeTransferFrom(
@@ -252,12 +259,12 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
     function _stake(uint256 _amount, bool _claimExistingRewards) internal {
         require(
             block.timestamp >= programStartsAt,
-            "Staking program not open yet"
+            'Staking program not open yet'
         );
-        require(block.timestamp < programEndsAt, "Staking program has closed");
+        require(block.timestamp < programEndsAt, 'Staking program has closed');
         require(
             _amount + users[_msgSender()].amountStaked > minStakingAmount,
-            "Staking less than required by the specified program"
+            'Staking less than required by the specified program'
         );
 
         stakingToken.safeTransferFrom(_msgSender(), address(this), _amount);
@@ -281,10 +288,10 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
     }
 
     function _withdraw(uint256 _amount, bool _claimExistingRewards) internal {
-        require(users[_msgSender()].amountStaked == 0, "No amount to withdraw");
+        require(users[_msgSender()].amountStaked == 0, 'No amount to withdraw');
         require(
             users[_msgSender()].amountStaked >= _amount,
-            "Amount to withdraw is greater than staked"
+            'Amount to withdraw is greater than staked'
         );
 
         // Generate a new rewards period => new program reward per liquidity
@@ -302,7 +309,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
         users[_msgSender()].amountStaked = _userNextAmountStaked;
         stakingTokenBalance -= _amount;
 
-        stakingToken.safeTransferFrom(address(this), _msgSender(), _amount);
+        stakingToken.safeTransfer(_msgSender(), _amount);
     }
 
     function _claimRewards() internal {
@@ -319,7 +326,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
 
         require(
             _userRewardsTaxed >= minRewardAmount,
-            "Not enough rewards to claim"
+            'Not enough rewards to claim'
         );
 
         users[_msgSender()]
@@ -327,11 +334,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
         taxAccumulated += _userTaxes;
         rewardTokenBalance -= _userRewardsTaxed;
 
-        rewardToken.safeTransferFrom(
-            address(this),
-            _msgSender(),
-            _userRewardsTaxed
-        );
+        rewardToken.safeTransfer(_msgSender(), _userRewardsTaxed);
     }
 
     /**
@@ -353,8 +356,11 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
 
         uint256 _userRewards = _userRewardsTaxed + _userTaxes;
 
-        uint256 _userProgramRewardPerLiquidityDelta = (_userRewards *
-            MAGNITUDE_CONSTANT) / _nextAmountStaked;
+        uint256 _userProgramRewardPerLiquidityDelta = Math.mulDiv(
+            _userRewards,
+            MAGNITUDE_CONSTANT,
+            _nextAmountStaked
+        );
 
         users[_msgSender()].lastProgramRewardPerLiquidity =
             programRewardPerLiquidity -
@@ -372,33 +378,39 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
             uint256 _programRewardPerLiquidityChange
         )
     {
-        uint256 _programNextAccruedRewardsAt = _min(
+        uint256 _programNextAccruedRewardsAt = Math.min(
             block.timestamp,
             programEndsAt
         );
 
-        // Freeze program reward per liquidity after the program ends
-        if (_programNextAccruedRewardsAt >= programEndsAt) {
-            return (0, 0);
-        }
-
         uint256 _rewardRemainingDuration = programEndsAt -
             programLastAccruedRewardsAt;
+
+        // Don't accrue if the remaining duration is 0 (program has ended)
+        if (_rewardRemainingDuration == 0) {
+            return (0, 0);
+        }
 
         uint256 _rewardPeriodDuration = _programNextAccruedRewardsAt -
             programLastAccruedRewardsAt;
 
-        _rewardAmountForPeriod =
-            (programRewardRemaining * _rewardPeriodDuration) /
-            _rewardRemainingDuration;
+        _rewardAmountForPeriod = Math.mulDiv(
+            programRewardRemaining,
+            _rewardPeriodDuration,
+            _rewardRemainingDuration
+        );
 
         _programRewardPerLiquidityChange = 0;
 
         if (stakingTokenBalance > 0) {
-            _programRewardPerLiquidityChange =
-                (_rewardAmountForPeriod * MAGNITUDE_CONSTANT) /
-                stakingTokenBalance;
+            _programRewardPerLiquidityChange = Math.mulDiv(
+                _rewardAmountForPeriod,
+                MAGNITUDE_CONSTANT,
+                stakingTokenBalance
+            );
             programRewardPerLiquidity += _programRewardPerLiquidityChange;
+        } else {
+            programRewardLost += _rewardAmountForPeriod;
         }
 
         programRewardRemaining -= _rewardAmountForPeriod;
@@ -416,19 +428,18 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 _userProgramRewardPerLiquidityDelta = _programRewardPerLiquidity -
                 _userLastProgramRewardPerLiquidity;
 
-        uint256 _userRewards = (_userProgramRewardPerLiquidityDelta *
-            _userAmountStaked) / MAGNITUDE_CONSTANT;
+        uint256 _userRewards = Math.mulDiv(
+            _userProgramRewardPerLiquidityDelta,
+            _userAmountStaked,
+            MAGNITUDE_CONSTANT
+        );
 
-        _userTaxes = (_userRewards * _taxRatioNumerator) / _taxRatioDenominator;
+        _userTaxes = Math.mulDiv(
+            _userRewards,
+            _taxRatioNumerator,
+            _taxRatioDenominator
+        );
 
-        _userRewardsTaxed = _userRewards - _userRewardsTaxed;
-    }
-
-    function _max(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a > b ? a : b;
-    }
-
-    function _min(uint256 a, uint256 b) internal pure returns (uint256) {
-        return a < b ? a : b;
+        _userRewardsTaxed = _userRewards - _userTaxes;
     }
 }
