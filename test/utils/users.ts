@@ -2,7 +2,7 @@ import { Dayjs } from 'dayjs';
 import Decimal from 'decimal.js';
 import { time } from '@nomicfoundation/hardhat-network-helpers';
 
-import { LatticeLpStaking } from '../../typechain-types';
+import { LatticeFixedRewardStaking } from '../../typechain-types';
 import { User } from '../types';
 
 import { getUserAccount } from './accounts';
@@ -15,7 +15,7 @@ const stakeUser = async (
   amount: Decimal,
   claimRewards: boolean,
   transactionAt: Dayjs,
-  staking: LatticeLpStaking
+  staking: LatticeFixedRewardStaking
 ) => {
   const userAccount = await getUserAccount(user);
 
@@ -46,7 +46,7 @@ const withdrawUser = async (
   amount: Decimal,
   claimRewards: boolean,
   transactionAt: Dayjs,
-  staking: LatticeLpStaking
+  staking: LatticeFixedRewardStaking
 ) => {
   const userAccount = await getUserAccount(user);
 
@@ -65,7 +65,7 @@ const withdrawUser = async (
 const claimRewardsUser = async (
   user: User,
   transactionAt: Dayjs,
-  staking: LatticeLpStaking
+  staking: LatticeFixedRewardStaking
 ) => {
   const userAccount = await getUserAccount(user);
 

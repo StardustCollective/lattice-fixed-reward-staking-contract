@@ -15,7 +15,7 @@ import {Pausable} from '@openzeppelin/contracts/security/Pausable.sol';
 import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
 import {Math} from '@openzeppelin/contracts/utils/math/Math.sol';
 
-contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
+contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
     using SafeERC20 for IERC20;
 
     uint256 public constant MAGNITUDE_CONSTANT = 1e40;
@@ -44,7 +44,7 @@ contract LatticeLpStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 lastProgramRewardPerLiquidity;
     }
 
-    mapping(address => StakingUser) users;
+    mapping(address => StakingUser) public users;
 
     constructor() {}
 

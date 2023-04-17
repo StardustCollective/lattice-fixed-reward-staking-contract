@@ -4,7 +4,7 @@ import lodash from 'lodash';
 import { ethers } from 'hardhat';
 
 import { StakingContractConfiguration } from '../types';
-import { LatticeLpStaking } from '../../typechain-types';
+import { LatticeFixedRewardStaking } from '../../typechain-types';
 
 import { deployTokenWithDecimals, dton } from './tokens';
 import { getOwnerAccount } from './accounts';
@@ -23,7 +23,7 @@ const DefaultStakingContractConfiguration: StakingContractConfiguration = {
 };
 
 const DeployedStakingPrograms = new Map<
-  LatticeLpStaking,
+  LatticeFixedRewardStaking,
   Awaited<ReturnType<typeof deployStakingContract>>
 >();
 
@@ -45,7 +45,7 @@ const deployStakingContract = async (
   );
 
   const StakingContract = await ethers.getContractFactory(
-    'LatticeLpStaking',
+    'LatticeFixedRewardStaking',
     ownerAccount
   );
 
@@ -95,7 +95,7 @@ const resetDeployedStakingPrograms = () => {
   DeployedStakingPrograms.clear();
 };
 
-const getDeployedStakingContract = (staking: LatticeLpStaking) => {
+const getDeployedStakingContract = (staking: LatticeFixedRewardStaking) => {
   const stakingData = DeployedStakingPrograms.get(staking);
 
   if (!stakingData) {
