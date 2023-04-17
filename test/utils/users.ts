@@ -10,7 +10,7 @@ import { getDeployedStakingContract } from './deployStakingContract';
 import { dton } from './tokens';
 import { waitForTransaction } from './transactions';
 
-const stakeUser = async (
+const userStake = async (
   user: User,
   amount: Decimal,
   claimRewards: boolean,
@@ -19,8 +19,7 @@ const stakeUser = async (
 ) => {
   const userAccount = await getUserAccount(user);
 
-  const { stakingToken, rewardToken, configuration } =
-    getDeployedStakingContract(staking);
+  const { stakingToken } = getDeployedStakingContract(staking);
 
   await waitForTransaction(
     stakingToken.mint(userAccount.address, dton(amount, stakingToken).toFixed())
@@ -41,40 +40,41 @@ const stakeUser = async (
   );
 };
 
-const withdrawUser = async (
+const userWithdraw = async (
   user: User,
   amount: Decimal,
   claimRewards: boolean,
+  waiveRewards: boolean,
   transactionAt: Dayjs,
   staking: LatticeFixedRewardStaking
 ) => {
   const userAccount = await getUserAccount(user);
 
-  const { stakingToken, rewardToken, configuration } =
-    getDeployedStakingContract(staking);
+  const { stakingToken } = getDeployedStakingContract(staking);
 
   await time.setNextBlockTimestamp(transactionAt.unix());
 
   return await waitForTransaction(
     staking
       .connect(userAccount)
-      .withdraw(dton(amount, stakingToken).toFixed(), claimRewards)
+      .withdraw(
+        dton(amount, stakingToken).toFixed(),
+        claimRewards,
+        waiveRewards
+      )
   );
 };
 
-const claimRewardsUser = async (
+const userClaimRewards = async (
   user: User,
   transactionAt: Dayjs,
   staking: LatticeFixedRewardStaking
 ) => {
   const userAccount = await getUserAccount(user);
 
-  const { stakingToken, rewardToken, configuration } =
-    getDeployedStakingContract(staking);
-
   await time.setNextBlockTimestamp(transactionAt.unix());
 
   return await waitForTransaction(staking.connect(userAccount).claimRewards());
 };
 
-export { stakeUser, withdrawUser, claimRewardsUser };
+export { userStake, userWithdraw, userClaimRewards };

@@ -56,7 +56,16 @@ const deployStakingContract = async (
     )
   );
 
-  const staking = await StakingContract.deploy();
+  const staking = await StakingContract.deploy(
+    stakingToken.address,
+    dton(_configuration.minStakingAmount, stakingToken).toFixed(),
+    rewardToken.address,
+    dton(_configuration.minRewardAmount, rewardToken).toFixed(),
+    _configuration.programStartsAt.unix(),
+    _configuration.programEndsAt.unix(),
+    _configuration.taxRatioNumerator.toFixed(),
+    _configuration.taxRatioDenominator.toFixed()
+  );
 
   await staking.deployTransaction.wait();
 
@@ -68,16 +77,8 @@ const deployStakingContract = async (
   );
 
   await waitForTransaction(
-    staking.initializeProgram(
-      stakingToken.address,
-      dton(_configuration.minStakingAmount, stakingToken).toFixed(),
-      rewardToken.address,
-      dton(_configuration.minRewardAmount, rewardToken).toFixed(),
-      dton(_configuration.programRewardAmount, rewardToken).toFixed(),
-      _configuration.programStartsAt.unix(),
-      _configuration.programEndsAt.unix(),
-      _configuration.taxRatioNumerator.toFixed(),
-      _configuration.taxRatioDenominator.toFixed()
+    staking.depositProgramRewards(
+      dton(_configuration.programRewardAmount, rewardToken).toFixed()
     )
   );
 
