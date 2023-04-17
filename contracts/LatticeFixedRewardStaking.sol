@@ -397,7 +397,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             'Unable to withdraw more than the program reward remaining'
         );
         programRewardRemaining -= _amount;
-        rewardToken.safeTransferFrom(address(this), _msgSender(), _amount);
+        rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
     function withdrawProgramLostRewards(uint256 _amount) public onlyOwner {
@@ -408,7 +408,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             'Amount is greated than available lost rewards'
         );
         programRewardLostWithdrawn += _amount;
-        rewardToken.safeTransferFrom(address(this), _msgSender(), _amount);
+        rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
     function withdrawProgramTaxes(uint256 _amount) public onlyOwner {
@@ -418,7 +418,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             'Amount is greated than available taxes'
         );
         taxAccumulatedWithdrawn += _amount;
-        rewardToken.safeTransferFrom(address(this), _msgSender(), _amount);
+        rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
     function recoverERC20(IERC20 token, uint256 amount) external onlyOwner {
