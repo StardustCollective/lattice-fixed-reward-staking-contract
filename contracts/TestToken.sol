@@ -19,7 +19,7 @@ contract TestToken is ERC20, Ownable {
     )
         ERC20(
             string.concat("TestToken", Strings.toString(_decimals)),
-            string.concat("TT8", Strings.toString(_decimals))
+            string.concat("TT", Strings.toString(_decimals))
         )
         Ownable()
     {
