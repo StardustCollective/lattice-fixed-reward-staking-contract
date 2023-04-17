@@ -21,16 +21,16 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
     uint256 public constant MAGNITUDE_CONSTANT = 1e40;
 
     IERC20 public stakingToken;
-    uint256 public stakingTokenBalance;
     uint256 public minStakingAmount;
 
     IERC20 public rewardToken;
-    uint256 public rewardTokenBalance;
     uint256 public minRewardAmount;
 
     uint256 public programStartsAt;
     uint256 public programEndsAt;
+    uint256 public programStakedLiquidity;
     uint256 public programRewardLost;
+    uint256 public programRewardLostWithdrawn;
     uint256 public programRewardRemaining;
     uint256 public programRewardPerLiquidity;
     uint256 public programLastAccruedRewardsAt;
@@ -38,6 +38,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
     uint256 public taxRatioNumerator;
     uint256 public taxRatioDenominator;
     uint256 public taxAccumulated;
+    uint256 public taxAccumulatedWithdrawn;
 
     struct StakingUser {
         uint256 amountStaked;
@@ -46,81 +47,70 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
 
     mapping(address => StakingUser) public users;
 
-    constructor() {}
+    event Staked(address indexed user, uint256 amount);
+    event Withdrawn(address indexed user, uint256 amount);
+    event RewardsClaimed(
+        address indexed user,
+        uint256 rewardsTaxed,
+        uint256 taxes
+    );
 
-    function initializeProgram(
+    event RewardsLost(uint256 amount);
+    event RecoveredERC20(address indexed token, uint256 amount);
+
+    constructor(
         address _stakingToken,
         uint256 _minStakingAmount,
         address _rewardToken,
         uint256 _minRewardAmount,
-        int256 _nextRewardAmountChange,
         uint256 _programStartsAt,
         uint256 _programEndsAt,
         uint256 _taxRatioNumerator,
         uint256 _taxRatioDenominator
-    ) external onlyOwner {
-        _configureProgramTimeline(_programStartsAt, _programEndsAt, false);
-        _configureProgramCondition(
-            _stakingToken,
-            _minStakingAmount,
-            _rewardToken,
-            _minRewardAmount,
-            _nextRewardAmountChange,
-            false
-        );
-        configureProgramTax(_taxRatioNumerator, _taxRatioDenominator);
-    }
+    ) {
+        require(_programStartsAt < _programEndsAt, 'Invalid program timeline');
+        require(_stakingToken != address(0), 'Invalid staking token');
+        require(_rewardToken != address(0), 'Invalid reward token');
 
-    function configureProgramCondition(
-        address _stakingToken,
-        uint256 _minStakingAmount,
-        address _rewardToken,
-        uint256 _minRewardAmount,
-        int256 _nextRewardAmountChange
-    ) public onlyOwner nonReentrant {
-        _configureProgramCondition(
-            _stakingToken,
-            _minStakingAmount,
-            _rewardToken,
-            _minRewardAmount,
-            _nextRewardAmountChange,
-            true
-        );
-    }
+        // Program Condition
+        stakingToken = IERC20(_stakingToken);
+        minStakingAmount = _minStakingAmount;
+        rewardToken = IERC20(_rewardToken);
+        minRewardAmount = _minRewardAmount;
 
-    function configureProgramTimeline(
-        uint256 _programStartsAt,
-        uint256 _programEndsAt
-    ) public onlyOwner {
-        _configureProgramTimeline(_programStartsAt, _programEndsAt, true);
-    }
+        // Program Timeline
+        programStartsAt = _programStartsAt;
+        programEndsAt = _programEndsAt;
+        programLastAccruedRewardsAt = _programStartsAt;
 
-    function configureProgramTax(
-        uint256 _taxRatioNumerator,
-        uint256 _taxRatioDenominator
-    ) public onlyOwner {
+        // Program Taxes
         taxRatioNumerator = _taxRatioNumerator;
         taxRatioDenominator = _taxRatioDenominator;
     }
 
+    /**
+     * General Functions
+     */
+
     function stake(
         uint256 _amount,
         bool _claimExistingRewards
-    ) external nonReentrant {
+    ) external nonReentrant whenNotPaused {
         _stake(_amount, _claimExistingRewards);
     }
 
     function withdraw(
         uint256 _amount,
-        bool _claimExistingRewards
-    ) external nonReentrant {
-        _withdraw(_amount, _claimExistingRewards);
+        bool _claimExistingRewards,
+        bool _waiveExistingRewards
+    ) external nonReentrant whenNotPaused {
+        _withdraw(_amount, _claimExistingRewards, _waiveExistingRewards);
     }
 
-    function claimRewards() external nonReentrant {
+    function claimRewards() external nonReentrant whenNotPaused {
         // We generate a new rewards period to include immediately previous rewards for the user
         _accrueRewardsPeriod();
-        _claimRewards();
+        _claimRewards(false);
     }
 
     /**
@@ -152,12 +142,12 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         // Use actual RPL if the program has ended or staked liquidity == 0
         if (
             _programNextAccruedRewardsAt < programEndsAt &&
-            stakingTokenBalance > 0
+            programStakedLiquidity > 0
         ) {
             _nextProgramRewardPerLiquidity += Math.mulDiv(
                 _rewardAmountForPeriod,
                 MAGNITUDE_CONSTANT,
-                stakingTokenBalance
+                programStakedLiquidity
             );
         }
 
@@ -170,100 +160,23 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         );
     }
 
-    function _configureProgramCondition(
-        address _stakingToken,
-        uint256 _minStakingAmount,
-        address _rewardToken,
-        uint256 _minRewardAmount,
-        int256 _nextRewardAmountChange,
-        bool _accrueRewards
-    ) internal {
-        require(
-            block.timestamp < programEndsAt,
-            'Unable to configure program condition for finished program'
-        );
-
-        if (_accrueRewards) {
-            _accrueRewardsPeriod();
-        }
-
-        stakingToken = IERC20(_stakingToken);
-        minStakingAmount = _minStakingAmount;
-        rewardToken = IERC20(_rewardToken);
-        minRewardAmount = _minRewardAmount;
-
-        if (_nextRewardAmountChange > 0) {
-            uint256 _rewardAmountToTransfer = uint256(_nextRewardAmountChange);
-
-            rewardToken.safeTransferFrom(
-                _msgSender(),
-                address(this),
-                _rewardAmountToTransfer
-            );
-
-            rewardTokenBalance += _rewardAmountToTransfer;
-            programRewardRemaining += _rewardAmountToTransfer;
-        } else if (_nextRewardAmountChange < 0) {
-            uint256 _rewardAmountToTransfer = uint256(
-                _nextRewardAmountChange * -1
-            );
-
-            require(
-                _rewardAmountToTransfer <= rewardTokenBalance,
-                'Reward change is greater than available'
-            );
-
-            rewardToken.safeTransferFrom(
-                address(this),
-                _msgSender(),
-                _rewardAmountToTransfer
-            );
-
-            rewardTokenBalance -= _rewardAmountToTransfer;
-            programRewardRemaining -= _rewardAmountToTransfer;
-        }
-    }
-
-    function _configureProgramTimeline(
-        uint256 _programStartsAt,
-        uint256 _programEndsAt,
-        bool _accrueRewards
-    ) internal {
-        uint256 _rewardAmountForPeriod;
-        uint256 _programRewardPerLiquidityChange;
-
-        if (_accrueRewards) {
-            (
-                _rewardAmountForPeriod,
-                _programRewardPerLiquidityChange
-            ) = _accrueRewardsPeriod();
-        }
-
-        if (_programStartsAt != 0) {
-            programStartsAt = _programStartsAt;
-
-            if (_accrueRewards) {
-                /**
-                 * @todo
-                 * change program start date without loss of rewards by unused time
-                 */
-            }
-        }
-
-        if (_programEndsAt != 0) {
-            programEndsAt = _programEndsAt;
-            programLastAccruedRewardsAt = _programStartsAt;
-        }
-    }
+    /**
+     * General Internal Functions
+     */
 
     function _stake(uint256 _amount, bool _claimExistingRewards) internal {
         require(
             block.timestamp >= programStartsAt,
             'Staking program not open yet'
         );
-        require(block.timestamp < programEndsAt, 'Staking program has closed');
         require(
-            _amount + users[_msgSender()].amountStaked > minStakingAmount,
+            programRewardRemaining > 0,
+            'There are no rewards deposited yet'
+        );
+        require(block.timestamp < programEndsAt, 'Staking program has closed');
+        require(_amount > 0, 'Unable to stake 0 tokens');
+        require(
+            _amount + users[_msgSender()].amountStaked >= minStakingAmount,
             'Staking less than required by the specified program'
         );
 
@@ -276,7 +189,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             _amount;
 
         if (_claimExistingRewards) {
-            _claimRewards();
+            _claimRewards(false);
         } else {
             _saveRewards(_userNextAmountStaked);
         }
@@ -284,14 +197,26 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         users[_msgSender()].amountStaked = _userNextAmountStaked;
         users[_msgSender()]
             .lastProgramRewardPerLiquidity = programRewardPerLiquidity;
-        stakingTokenBalance += _amount;
+        programStakedLiquidity += _amount;
+
+        emit Staked(_msgSender(), _amount);
     }
 
-    function _withdraw(uint256 _amount, bool _claimExistingRewards) internal {
-        require(users[_msgSender()].amountStaked == 0, 'No amount to withdraw');
+    function _withdraw(
+        uint256 _amount,
+        bool _claimExistingRewards,
+        bool _waiveExistingRewards
+    ) internal {
+        require(users[_msgSender()].amountStaked != 0, 'No amount to withdraw');
         require(
             users[_msgSender()].amountStaked >= _amount,
             'Amount to withdraw is greater than staked'
+        );
+        require(_amount > 0, 'Unable to withdraw 0 tokens');
+        require(
+            users[_msgSender()].amountStaked == _amount ||
+                users[_msgSender()].amountStaked - _amount >= minStakingAmount,
+            'The final staked amount would be than required by the specified program'
         );
 
         // Generate a new rewards period => new program reward per liquidity
@@ -301,18 +226,20 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             _amount;
 
         if (_claimExistingRewards || _userNextAmountStaked == 0) {
-            _claimRewards();
+            _claimRewards(_waiveExistingRewards);
         } else {
             _saveRewards(_userNextAmountStaked);
         }
 
         users[_msgSender()].amountStaked = _userNextAmountStaked;
-        stakingTokenBalance -= _amount;
+        programStakedLiquidity -= _amount;
 
         stakingToken.safeTransfer(_msgSender(), _amount);
+
+        emit Withdrawn(_msgSender(), _amount);
     }
 
-    function _claimRewards() internal {
+    function _claimRewards(bool _waiveExistingRewards) internal {
         (
             uint256 _userRewardsTaxed,
             uint256 _userTaxes
@@ -325,16 +252,21 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             );
 
         require(
-            _userRewardsTaxed >= minRewardAmount,
+            _userRewardsTaxed >= minRewardAmount || _waiveExistingRewards,
             'Not enough rewards to claim'
         );
 
         users[_msgSender()]
             .lastProgramRewardPerLiquidity = programRewardPerLiquidity;
-        taxAccumulated += _userTaxes;
-        rewardTokenBalance -= _userRewardsTaxed;
 
-        rewardToken.safeTransfer(_msgSender(), _userRewardsTaxed);
+        if (_waiveExistingRewards) {
+            programRewardLost += _userRewardsTaxed + _userTaxes;
+            emit RewardsLost(_userRewardsTaxed + _userTaxes);
+        } else {
+            taxAccumulated += _userTaxes;
+            rewardToken.safeTransfer(_msgSender(), _userRewardsTaxed);
+            emit RewardsClaimed(_msgSender(), _userRewardsTaxed, _userTaxes);
+        }
     }
 
     /**
@@ -402,15 +334,16 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
 
         _programRewardPerLiquidityChange = 0;
 
-        if (stakingTokenBalance > 0) {
+        if (programStakedLiquidity > 0) {
             _programRewardPerLiquidityChange = Math.mulDiv(
                 _rewardAmountForPeriod,
                 MAGNITUDE_CONSTANT,
-                stakingTokenBalance
+                programStakedLiquidity
             );
             programRewardPerLiquidity += _programRewardPerLiquidityChange;
         } else {
             programRewardLost += _rewardAmountForPeriod;
+            emit RewardsLost(_rewardAmountForPeriod);
         }
 
         programRewardRemaining -= _rewardAmountForPeriod;
@@ -441,5 +374,84 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         );
 
         _userRewardsTaxed = _userRewards - _userTaxes;
+    }
+
+    /**
+     * Admin Functions
+     */
+
+    function accrueRewardsPeriod() public onlyOwner {
+        _accrueRewardsPeriod();
+    }
+
+    function depositProgramRewards(uint256 _amount) public onlyOwner {
+        require(_amount > 0, 'Unable to deposit 0 reward tokens');
+        rewardToken.safeTransferFrom(_msgSender(), address(this), _amount);
+        programRewardRemaining += _amount;
+    }
+
+    function withdrawProgramRewards(uint256 _amount) public onlyOwner {
+        require(_amount > 0, 'Unable to withdraw 0 reward tokens');
+        require(
+            _amount <= programRewardRemaining,
+            'Unable to withdraw more than the program reward remaining'
+        );
+        programRewardRemaining -= _amount;
+        rewardToken.safeTransferFrom(address(this), _msgSender(), _amount);
+    }
+
+    function withdrawProgramLostRewards(uint256 _amount) public onlyOwner {
+        uint256 _lostRewardsAvailable = programRewardLost -
+            programRewardLostWithdrawn;
+        require(
+            _amount <= _lostRewardsAvailable,
+            'Amount is greated than available lost rewards'
+        );
+        programRewardLostWithdrawn += _amount;
+        rewardToken.safeTransferFrom(address(this), _msgSender(), _amount);
+    }
+
+    function withdrawProgramTaxes(uint256 _amount) public onlyOwner {
+        uint256 _taxesAvailable = taxAccumulated - taxAccumulatedWithdrawn;
+        require(
+            _amount <= _taxesAvailable,
+            'Amount is greated than available taxes'
+        );
+        taxAccumulatedWithdrawn += _amount;
+        rewardToken.safeTransferFrom(address(this), _msgSender(), _amount);
+    }
+
+    function recoverERC20(IERC20 token, uint256 amount) external onlyOwner {
+        require(
+            address(token) != address(stakingToken),
+            'Cannot withdraw the staking token'
+        );
+        require(
+            address(token) != address(rewardToken),
+            'Cannot withdraw the reward token'
+        );
+
+        uint256 tokenBalance = token.balanceOf(address(this));
+        require(tokenBalance >= amount, 'Not enough tokens to withdraw');
+
+        token.safeTransfer(owner(), amount);
+
+        emit RecoveredERC20(address(token), amount);
+    }
+
+    function updateProgramTax(
+        uint256 _taxRatioNumerator,
+        uint256 _taxRatioDenominator
+    ) public onlyOwner {
+        taxRatioNumerator = _taxRatioNumerator;
+        taxRatioDenominator = _taxRatioDenominator;
+    }
+
+    function pause() public onlyOwner {
+        _pause();
+    }
+
+    function unpause() public onlyOwner {
+        _unpause();
     }
 }
