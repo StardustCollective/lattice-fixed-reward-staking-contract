@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 /**
- * @title Lattice LP Fixed Reward Staking Contract
+ * @title Lattice Fixed Reward Staking Contract
  * @author Stardust Collective <info@stardustcollective.org>
  *
  * Transformed idea from SushiSwap's https://github.com/sushiswap/StakingContract
