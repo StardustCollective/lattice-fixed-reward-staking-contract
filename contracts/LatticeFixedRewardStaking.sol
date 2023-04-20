@@ -12,11 +12,14 @@ import {IERC20} from '@openzeppelin/contracts/token/ERC20/IERC20.sol';
 
 import {ReentrancyGuard} from '@openzeppelin/contracts/security/ReentrancyGuard.sol';
 import {Pausable} from '@openzeppelin/contracts/security/Pausable.sol';
-import {Ownable} from '@openzeppelin/contracts/access/Ownable.sol';
+import {AccessControl} from '@openzeppelin/contracts/access/AccessControl.sol';
 import {Math} from '@openzeppelin/contracts/utils/math/Math.sol';
 
-contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
+contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
     using SafeERC20 for IERC20;
+
+    bytes32 public constant ADMIN_ROLE = keccak256('ADMIN_ROLE');
+    bytes32 public constant MANAGER_ROLE = keccak256('MANAGER_ROLE');
 
     uint256 public constant MAGNITUDE_CONSTANT = 1e40;
 
@@ -26,14 +29,14 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
     IERC20 public rewardToken;
     uint256 public minRewardAmount;
 
-    uint256 public programStartsAt;
-    uint256 public programEndsAt;
+    uint64 public programStartsAt;
     uint256 public programStakedLiquidity;
-    uint256 public programRewardLost;
-    uint256 public programRewardLostWithdrawn;
     uint256 public programRewardRemaining;
     uint256 public programRewardPerLiquidity;
-    uint256 public programLastAccruedRewardsAt;
+    uint256 public programRewardLost;
+    uint256 public programRewardLostWithdrawn;
+    uint64 public programRewardsDepletionAt;
+    uint64 public programLastAccruedRewardsAt;
 
     uint256 public taxRatioNumerator;
     uint256 public taxRatioDenominator;
@@ -54,6 +57,15 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 rewardsTaxed,
         uint256 taxes
     );
+    event StakingConditionChanged(
+        uint256 remainingRewards,
+        uint64 programLastAccruedRewardsAt,
+        uint64 programRewardsDepletionAt
+    );
+    event TaxConditionChanged(
+        uint256 taxRatioNumerator,
+        uint256 taxRatioDenominator
+    );
 
     event RewardsLost(uint256 amount);
     event RecoveredERC20(address indexed token, uint256 amount);
@@ -63,14 +75,22 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 _minStakingAmount,
         address _rewardToken,
         uint256 _minRewardAmount,
-        uint256 _programStartsAt,
-        uint256 _programEndsAt,
+        uint64 _programStartsAt,
+        uint64 _programRewardsDepletionAt,
         uint256 _taxRatioNumerator,
-        uint256 _taxRatioDenominator
+        uint256 _taxRatioDenominator,
+        address[] memory managers
     ) {
-        require(_programStartsAt < _programEndsAt, 'Invalid program timeline');
+        require(
+            _programStartsAt < _programRewardsDepletionAt,
+            'Invalid program timeline'
+        );
         require(_stakingToken != address(0), 'Invalid staking token');
         require(_rewardToken != address(0), 'Invalid reward token');
+        require(
+            _taxRatioNumerator * 100 <= _taxRatioDenominator * 10,
+            'Tax ratio exceeds 10% cap'
+        );
 
         // Program Condition
         stakingToken = IERC20(_stakingToken);
@@ -80,12 +100,20 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
 
         // Program Timeline
         programStartsAt = _programStartsAt;
-        programEndsAt = _programEndsAt;
+        programRewardsDepletionAt = _programRewardsDepletionAt;
         programLastAccruedRewardsAt = _programStartsAt;
 
         // Program Taxes
         taxRatioNumerator = _taxRatioNumerator;
         taxRatioDenominator = _taxRatioDenominator;
+
+        _setRoleAdmin(MANAGER_ROLE, ADMIN_ROLE);
+        _grantRole(ADMIN_ROLE, _msgSender());
+        _grantRole(MANAGER_ROLE, _msgSender());
+
+        for (uint16 i = 0; i < managers.length; i++) {
+            _grantRole(MANAGER_ROLE, managers[i]);
+        }
     }
 
     /**
@@ -120,15 +148,14 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
     function availableRewards(
         address user
     ) external view returns (uint256 _userRewardsTaxed, uint256 _userTaxes) {
-        uint256 _programNextAccruedRewardsAt = Math.min(
-            block.timestamp,
-            programEndsAt
+        uint64 _programNextAccruedRewardsAt = uint64(
+            Math.min(block.timestamp, programRewardsDepletionAt)
         );
 
-        uint256 _rewardRemainingDuration = programEndsAt -
+        uint64 _rewardRemainingDuration = programRewardsDepletionAt -
             programLastAccruedRewardsAt;
 
-        uint256 _rewardPeriodDuration = _programNextAccruedRewardsAt -
+        uint64 _rewardPeriodDuration = _programNextAccruedRewardsAt -
             programLastAccruedRewardsAt;
 
         uint256 _rewardAmountForPeriod = Math.mulDiv(
@@ -141,7 +168,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
 
         // Use actual RPL if the program has ended or staked liquidity == 0
         if (
-            _programNextAccruedRewardsAt < programEndsAt &&
+            _programNextAccruedRewardsAt < programRewardsDepletionAt &&
             programStakedLiquidity > 0
         ) {
             _nextProgramRewardPerLiquidity += Math.mulDiv(
@@ -173,7 +200,10 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             programRewardRemaining > 0,
             'There are no rewards deposited yet'
         );
-        require(block.timestamp < programEndsAt, 'Staking program has closed');
+        require(
+            block.timestamp < programRewardsDepletionAt,
+            'Staking program has closed'
+        );
         require(_amount > 0, 'Unable to stake 0 tokens');
         require(
             _amount + users[_msgSender()].amountStaked >= minStakingAmount,
@@ -310,12 +340,11 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             uint256 _programRewardPerLiquidityChange
         )
     {
-        uint256 _programNextAccruedRewardsAt = Math.min(
-            block.timestamp,
-            programEndsAt
+        uint64 _programNextAccruedRewardsAt = uint64(
+            Math.min(block.timestamp, programRewardsDepletionAt)
         );
 
-        uint256 _rewardRemainingDuration = programEndsAt -
+        uint64 _rewardRemainingDuration = programRewardsDepletionAt -
             programLastAccruedRewardsAt;
 
         // Don't accrue if the remaining duration is 0 (program has ended)
@@ -323,7 +352,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
             return (0, 0);
         }
 
-        uint256 _rewardPeriodDuration = _programNextAccruedRewardsAt -
+        uint64 _rewardPeriodDuration = _programNextAccruedRewardsAt -
             programLastAccruedRewardsAt;
 
         _rewardAmountForPeriod = Math.mulDiv(
@@ -380,17 +409,26 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
      * Admin Functions
      */
 
-    function accrueRewardsPeriod() public onlyOwner {
+    function accrueRewardsPeriod() public onlyRole(MANAGER_ROLE) {
         _accrueRewardsPeriod();
     }
 
-    function depositProgramRewards(uint256 _amount) public onlyOwner {
+    function depositProgramRewards(
+        uint256 _amount
+    ) public onlyRole(MANAGER_ROLE) {
         require(_amount > 0, 'Unable to deposit 0 reward tokens');
         rewardToken.safeTransferFrom(_msgSender(), address(this), _amount);
         programRewardRemaining += _amount;
+        emit StakingConditionChanged(
+            programRewardRemaining,
+            programLastAccruedRewardsAt,
+            programRewardsDepletionAt
+        );
     }
 
-    function withdrawProgramRewards(uint256 _amount) public onlyOwner {
+    function withdrawProgramRewards(
+        uint256 _amount
+    ) public onlyRole(MANAGER_ROLE) {
         require(_amount > 0, 'Unable to withdraw 0 reward tokens');
         require(
             _amount <= programRewardRemaining,
@@ -398,9 +436,16 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         );
         programRewardRemaining -= _amount;
         rewardToken.safeTransfer(_msgSender(), _amount);
+        emit StakingConditionChanged(
+            programRewardRemaining,
+            programLastAccruedRewardsAt,
+            programRewardsDepletionAt
+        );
     }
 
-    function withdrawProgramLostRewards(uint256 _amount) public onlyOwner {
+    function withdrawProgramLostRewards(
+        uint256 _amount
+    ) public onlyRole(MANAGER_ROLE) {
         uint256 _lostRewardsAvailable = programRewardLost -
             programRewardLostWithdrawn;
         require(
@@ -411,7 +456,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
-    function withdrawProgramTaxes(uint256 _amount) public onlyOwner {
+    function withdrawProgramTaxes(uint256 _amount) public onlyRole(ADMIN_ROLE) {
         uint256 _taxesAvailable = taxAccumulated - taxAccumulatedWithdrawn;
         require(
             _amount <= _taxesAvailable,
@@ -421,7 +466,38 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
-    function recoverERC20(IERC20 token, uint256 amount) external onlyOwner {
+    function updateProgramDepletionDate(
+        uint64 _programRewardsDepletionAt
+    ) public onlyRole(MANAGER_ROLE) {
+        require(
+            _programRewardsDepletionAt > block.timestamp,
+            'New program depletion date must be greater than current time'
+        );
+        programRewardsDepletionAt = _programRewardsDepletionAt;
+        emit StakingConditionChanged(
+            programRewardRemaining,
+            programLastAccruedRewardsAt,
+            programRewardsDepletionAt
+        );
+    }
+
+    function updateProgramTax(
+        uint256 _taxRatioNumerator,
+        uint256 _taxRatioDenominator
+    ) public onlyRole(ADMIN_ROLE) {
+        require(
+            _taxRatioNumerator * 100 <= _taxRatioDenominator * 10,
+            'Tax ratio exceeds 10% cap'
+        );
+        taxRatioNumerator = _taxRatioNumerator;
+        taxRatioDenominator = _taxRatioDenominator;
+        emit TaxConditionChanged(taxRatioNumerator, taxRatioDenominator);
+    }
+
+    function recoverERC20(
+        IERC20 token,
+        uint256 amount
+    ) external onlyRole(MANAGER_ROLE) {
         require(
             address(token) != address(stakingToken),
             'Cannot withdraw the staking token'
@@ -434,24 +510,16 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, Ownable {
         uint256 tokenBalance = token.balanceOf(address(this));
         require(tokenBalance >= amount, 'Not enough tokens to withdraw');
 
-        token.safeTransfer(owner(), amount);
+        token.safeTransfer(_msgSender(), amount);
 
         emit RecoveredERC20(address(token), amount);
     }
 
-    function updateProgramTax(
-        uint256 _taxRatioNumerator,
-        uint256 _taxRatioDenominator
-    ) public onlyOwner {
-        taxRatioNumerator = _taxRatioNumerator;
-        taxRatioDenominator = _taxRatioDenominator;
-    }
-
-    function pause() public onlyOwner {
+    function pause() public onlyRole(MANAGER_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyOwner {
+    function unpause() public onlyRole(MANAGER_ROLE) {
         _unpause();
     }
 }
