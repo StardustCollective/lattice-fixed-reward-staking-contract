@@ -168,7 +168,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
         // Use actual RPL if the program has ended or staked liquidity == 0
         if (
-            _programNextAccruedRewardsAt < programRewardsDepletionAt &&
+            _programNextAccruedRewardsAt <= programRewardsDepletionAt &&
             programStakedLiquidity > 0
         ) {
             _nextProgramRewardPerLiquidity += Math.mulDiv(
@@ -225,8 +225,6 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         }
 
         users[_msgSender()].amountStaked = _userNextAmountStaked;
-        users[_msgSender()]
-            .lastProgramRewardPerLiquidity = programRewardPerLiquidity;
         programStakedLiquidity += _amount;
 
         emit Staked(_msgSender(), _amount);
