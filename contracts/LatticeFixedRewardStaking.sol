@@ -57,10 +57,15 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         uint256 rewardsTaxed,
         uint256 taxes
     );
+
     event StakingConditionChanged(
         uint256 remainingRewards,
         uint64 programLastAccruedRewardsAt,
         uint64 programRewardsDepletionAt
+    );
+    event StakingRestrictionChanged(
+        uint256 minStakingAmount,
+        uint256 minRewardAmount
     );
     event TaxConditionChanged(
         uint256 taxRatioNumerator,
@@ -476,6 +481,17 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
             programRewardRemaining,
             programLastAccruedRewardsAt,
             programRewardsDepletionAt
+        );
+    }
+
+    function updateProgramRestriction(
+        uint256 _minStakingAmount,
+        uint256 _minRewardAmount
+    ) public onlyRole(STEWARD_ROLE) {
+        minStakingAmount = _minStakingAmount;
+        minRewardAmount = _minRewardAmount;
+        emit StakingRestrictionChanged(
+            minStakingAmount,minRewardAmount
         );
     }
 
