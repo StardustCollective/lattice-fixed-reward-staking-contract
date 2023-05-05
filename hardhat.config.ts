@@ -23,11 +23,19 @@ const config: HardhatUserConfig = {
       }
     },
     mainnet: {
-      url: `https://mainnet.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+      url: process.env.QUICKNODE_ETHEREUM_MAINNET,
       accounts
     },
     goerli: {
-      url: `https://goerli.infura.io/v3/${process.env.INFURA_PROJECT_ID}`,
+      url: process.env.QUICKNODE_ETHEREUM_GOERLI,
+      accounts
+    },
+    polygon: {
+      url: process.env.QUICKNODE_POLYGON_MAINNET,
+      accounts
+    },
+    mumbai: {
+      url: process.env.QUICKNODE_POLYGON_MUMBAI,
       accounts
     }
   }

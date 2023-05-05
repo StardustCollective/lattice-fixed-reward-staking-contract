@@ -3,8 +3,8 @@ import hre, { ethers } from 'hardhat';
 import { generateSolidityStdInputForContract } from '../utils';
 
 async function main() {
-  if (hre.network.name !== 'goerli') {
-    throw new Error('Bad network config, must be goerli');
+  if (!['goerli', 'mumbai'].includes(hre.network.name)) {
+    throw new Error('Bad network config, must be a testnet');
   }
 
   await generateSolidityStdInputForContract('TestToken');
