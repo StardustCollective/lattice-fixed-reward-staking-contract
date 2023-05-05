@@ -23,13 +23,13 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
     uint256 public constant MAGNITUDE_CONSTANT = 1e40;
 
-    IERC20 public stakingToken;
+    IERC20 public immutable stakingToken;
     uint256 public minStakingAmount;
 
-    IERC20 public rewardToken;
+    IERC20 public immutable rewardToken;
     uint256 public minRewardAmount;
 
-    uint64 public programStartsAt;
+    uint64 public immutable programStartsAt;
     uint256 public programStakedLiquidity;
     uint256 public programRewardRemaining;
     uint256 public programRewardPerLiquidity;
@@ -93,7 +93,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         require(_stakingToken != address(0), 'Invalid staking token');
         require(_rewardToken != address(0), 'Invalid reward token');
         require(
-            _taxRatioNumerator * 100 <= _taxRatioDenominator * 10,
+            _taxRatioNumerator * 10 <= _taxRatioDenominator,
             'Tax ratio exceeds 10% cap'
         );
 
@@ -412,13 +412,13 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
      * Admin Functions
      */
 
-    function accrueRewardsPeriod() public onlyRole(STEWARD_ROLE) {
+    function accrueRewardsPeriod() external onlyRole(STEWARD_ROLE) {
         _accrueRewardsPeriod();
     }
 
     function depositProgramRewards(
         uint256 _amount
-    ) public onlyRole(STEWARD_ROLE) {
+    ) external onlyRole(STEWARD_ROLE) {
         require(_amount > 0, 'Unable to deposit 0 reward tokens');
         rewardToken.safeTransferFrom(_msgSender(), address(this), _amount);
         programRewardRemaining += _amount;
@@ -431,7 +431,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
     function withdrawProgramRewards(
         uint256 _amount
-    ) public onlyRole(STEWARD_ROLE) {
+    ) external onlyRole(STEWARD_ROLE) {
         require(_amount > 0, 'Unable to withdraw 0 reward tokens');
         require(
             _amount <= programRewardRemaining,
@@ -448,7 +448,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
     function withdrawProgramLostRewards(
         uint256 _amount
-    ) public onlyRole(STEWARD_ROLE) {
+    ) external onlyRole(STEWARD_ROLE) {
         uint256 _lostRewardsAvailable = programRewardLost -
             programRewardLostWithdrawn;
         require(
@@ -459,7 +459,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
-    function withdrawProgramTaxes(uint256 _amount) public onlyRole(CONFIGURATION_ROLE) {
+    function withdrawProgramTaxes(uint256 _amount) external onlyRole(CONFIGURATION_ROLE) {
         uint256 _taxesAvailable = taxAccumulated - taxAccumulatedWithdrawn;
         require(
             _amount <= _taxesAvailable,
@@ -471,7 +471,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
     function updateProgramDepletionDate(
         uint64 _programRewardsDepletionAt
-    ) public onlyRole(STEWARD_ROLE) {
+    ) external onlyRole(STEWARD_ROLE) {
         require(
             _programRewardsDepletionAt > block.timestamp,
             'New program depletion date must be greater than current time'
@@ -487,7 +487,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
     function updateProgramRestriction(
         uint256 _minStakingAmount,
         uint256 _minRewardAmount
-    ) public onlyRole(STEWARD_ROLE) {
+    ) external onlyRole(STEWARD_ROLE) {
         minStakingAmount = _minStakingAmount;
         minRewardAmount = _minRewardAmount;
         emit StakingRestrictionChanged(
@@ -498,9 +498,9 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
     function updateProgramTax(
         uint256 _taxRatioNumerator,
         uint256 _taxRatioDenominator
-    ) public onlyRole(CONFIGURATION_ROLE) {
+    ) external onlyRole(CONFIGURATION_ROLE) {
         require(
-            _taxRatioNumerator * 100 <= _taxRatioDenominator * 10,
+            _taxRatioNumerator * 10 <= _taxRatioDenominator,
             'Tax ratio exceeds 10% cap'
         );
         taxRatioNumerator = _taxRatioNumerator;
@@ -529,11 +529,11 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         emit RecoveredERC20(address(token), amount);
     }
 
-    function pause() public onlyRole(STEWARD_ROLE) {
+    function pause() external onlyRole(STEWARD_ROLE) {
         _pause();
     }
 
-    function unpause() public onlyRole(STEWARD_ROLE) {
+    function unpause() external onlyRole(STEWARD_ROLE) {
         _unpause();
     }
 }
