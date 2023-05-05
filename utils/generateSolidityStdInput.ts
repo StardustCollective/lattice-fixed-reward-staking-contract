@@ -8,7 +8,7 @@ const generateSolidityStdInputForContract = async (contractName: string) => {
     `${contractArtifact.sourceName}:${contractArtifact.contractName}`
   );
 
-  const filename = `${contractName}.stdin.json`;
+  const filename = `${__dirname}/../stdins/${contractName}.stdin.json`;
 
   await fs.promises.writeFile(
     filename,

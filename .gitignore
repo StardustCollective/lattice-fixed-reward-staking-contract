@@ -139,3 +139,5 @@ typechain-types
 cache
 artifacts
 
+# solidity std inputs
+stdins
