@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 
 import hre from 'hardhat';
 
@@ -8,7 +9,10 @@ const generateSolidityStdInputForContract = async (contractName: string) => {
     `${contractArtifact.sourceName}:${contractArtifact.contractName}`
   );
 
-  const filename = `${__dirname}/../stdins/${contractName}.stdin.json`;
+  const foldername = path.join(__dirname, '..', 'stdins');
+  await fs.promises.mkdir(foldername, { recursive: true });
+
+  const filename = path.join(foldername, `${contractName}.stdin.json`);
 
   await fs.promises.writeFile(
     filename,
