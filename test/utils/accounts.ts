@@ -1,15 +1,31 @@
 import { ethers } from 'hardhat';
 
-import { User } from '../types';
+const NamedAccounts = [
+  'owner',
+  'steward-role',
+  'configuration-role',
+  'user-a',
+  'user-b',
+  'user-c'
+] as const;
+
+type NamedAccount = (typeof NamedAccounts)[number];
 
 const getOwnerAccount = async () => {
-  return (await ethers.getSigners())[0];
+  return getNamedAccount('owner');
 };
 
-const getUserAccount = async (name: User) => {
-  return (await ethers.getSigners())[
-    name.toLocaleUpperCase().charCodeAt(0) - 64
-  ];
+const getNamedAccount = async (account: NamedAccount) => {
+  const accounts = await ethers.getSigners();
+  const index = NamedAccounts.findIndex(
+    (namedAccount) => namedAccount === account
+  );
+
+  if (index === -1) {
+    throw new Error('Unable to find named account => ' + account);
+  }
+
+  return accounts[index];
 };
 
-export { getOwnerAccount, getUserAccount };
+export { NamedAccounts, NamedAccount, getOwnerAccount, getNamedAccount };
