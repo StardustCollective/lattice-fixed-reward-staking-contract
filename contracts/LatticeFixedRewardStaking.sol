@@ -18,7 +18,8 @@ import {Math} from '@openzeppelin/contracts/utils/math/Math.sol';
 contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
     using SafeERC20 for IERC20;
 
-    bytes32 public constant CONFIGURATION_ROLE = keccak256('CONFIGURATION_ROLE');
+    bytes32 public constant CONFIGURATION_ROLE =
+        keccak256('CONFIGURATION_ROLE');
     bytes32 public constant STEWARD_ROLE = keccak256('STEWARD_ROLE');
 
     uint256 public constant MAGNITUDE_CONSTANT = 1e40;
@@ -57,7 +58,6 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         uint256 rewardsTaxed,
         uint256 taxes
     );
-
     event StakingConditionChanged(
         uint256 remainingRewards,
         uint64 programLastAccruedRewardsAt,
@@ -71,7 +71,6 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         uint256 taxRatioNumerator,
         uint256 taxRatioDenominator
     );
-
     event RewardsLost(uint256 amount);
     event RecoveredERC20(address indexed token, uint256 amount);
 
@@ -112,6 +111,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         taxRatioNumerator = _taxRatioNumerator;
         taxRatioDenominator = _taxRatioDenominator;
 
+        _setRoleAdmin(CONFIGURATION_ROLE, CONFIGURATION_ROLE);
         _setRoleAdmin(STEWARD_ROLE, CONFIGURATION_ROLE);
         _grantRole(CONFIGURATION_ROLE, _msgSender());
         _grantRole(STEWARD_ROLE, _msgSender());
@@ -336,13 +336,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
      * Generate a new rewards period, discard unused/reserved reward amount for the generated period
      * add reward per liquidity for the generated period in order to claim/calculate rewards.
      */
-    function _accrueRewardsPeriod()
-        internal
-        returns (
-            uint256 _rewardAmountForPeriod,
-            uint256 _programRewardPerLiquidityChange
-        )
-    {
+    function _accrueRewardsPeriod() internal {
         uint64 _programNextAccruedRewardsAt = uint64(
             Math.min(block.timestamp, programRewardsDepletionAt)
         );
@@ -352,19 +346,19 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
         // Don't accrue if the remaining duration is 0 (program has ended)
         if (_rewardRemainingDuration == 0) {
-            return (0, 0);
+            return;
         }
 
         uint64 _rewardPeriodDuration = _programNextAccruedRewardsAt -
             programLastAccruedRewardsAt;
 
-        _rewardAmountForPeriod = Math.mulDiv(
+        uint256 _rewardAmountForPeriod = Math.mulDiv(
             programRewardRemaining,
             _rewardPeriodDuration,
             _rewardRemainingDuration
         );
 
-        _programRewardPerLiquidityChange = 0;
+        uint256 _programRewardPerLiquidityChange = 0;
 
         if (programStakedLiquidity > 0) {
             _programRewardPerLiquidityChange = Math.mulDiv(
@@ -413,12 +407,16 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
      */
 
     function accrueRewardsPeriod() external onlyRole(STEWARD_ROLE) {
+        require(
+            block.timestamp >= programStartsAt,
+            'Staking program not open yet'
+        );
         _accrueRewardsPeriod();
     }
 
     function depositProgramRewards(
         uint256 _amount
-    ) external onlyRole(STEWARD_ROLE) {
+    ) external nonReentrant onlyRole(STEWARD_ROLE) {
         require(_amount > 0, 'Unable to deposit 0 reward tokens');
         rewardToken.safeTransferFrom(_msgSender(), address(this), _amount);
         programRewardRemaining += _amount;
@@ -431,7 +429,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
     function withdrawProgramRewards(
         uint256 _amount
-    ) external onlyRole(STEWARD_ROLE) {
+    ) external nonReentrant onlyRole(STEWARD_ROLE) {
         require(_amount > 0, 'Unable to withdraw 0 reward tokens');
         require(
             _amount <= programRewardRemaining,
@@ -448,7 +446,8 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
 
     function withdrawProgramLostRewards(
         uint256 _amount
-    ) external onlyRole(STEWARD_ROLE) {
+    ) external nonReentrant onlyRole(STEWARD_ROLE) {
+        require(_amount > 0, 'Unable to withdraw 0 lost rewards tokens');
         uint256 _lostRewardsAvailable = programRewardLost -
             programRewardLostWithdrawn;
         require(
@@ -459,7 +458,10 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         rewardToken.safeTransfer(_msgSender(), _amount);
     }
 
-    function withdrawProgramTaxes(uint256 _amount) external onlyRole(CONFIGURATION_ROLE) {
+    function withdrawProgramTaxes(
+        uint256 _amount
+    ) external nonReentrant onlyRole(CONFIGURATION_ROLE) {
+        require(_amount > 0, 'Unable to withdraw 0 program taxes');
         uint256 _taxesAvailable = taxAccumulated - taxAccumulatedWithdrawn;
         require(
             _amount <= _taxesAvailable,
@@ -490,9 +492,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
     ) external onlyRole(STEWARD_ROLE) {
         minStakingAmount = _minStakingAmount;
         minRewardAmount = _minRewardAmount;
-        emit StakingRestrictionChanged(
-            minStakingAmount,minRewardAmount
-        );
+        emit StakingRestrictionChanged(minStakingAmount, minRewardAmount);
     }
 
     function updateProgramTax(
@@ -511,7 +511,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
     function recoverERC20(
         IERC20 token,
         uint256 amount
-    ) external onlyRole(STEWARD_ROLE) {
+    ) external nonReentrant onlyRole(STEWARD_ROLE) {
         require(
             address(token) != address(stakingToken),
             'Cannot withdraw the staking token'
