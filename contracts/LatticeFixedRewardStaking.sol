@@ -249,7 +249,7 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         require(
             users[_msgSender()].amountStaked == _amount ||
                 users[_msgSender()].amountStaked - _amount >= minStakingAmount,
-            'The final staked amount would be than required by the specified program'
+            'The final staked amount would be less than required by the specified program'
         );
 
         // Generate a new rewards period => new program reward per liquidity
