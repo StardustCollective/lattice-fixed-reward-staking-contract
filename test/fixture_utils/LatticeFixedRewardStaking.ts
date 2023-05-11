@@ -1,3 +1,4 @@
+import { time } from '@nomicfoundation/hardhat-network-helpers';
 import dayjs from 'dayjs';
 import Decimal from 'decimal.js';
 import { ethers } from 'hardhat';
@@ -23,12 +24,12 @@ const deployContract = createFixtureUtil(
       tokenDecimals: 8
     }),
     minStakingAmount: new Decimal('100'),
-    minRewardAmount: new Decimal('10'),
+    minRewardAmount: new Decimal('1000'),
     programRewardAmount: new Decimal('30000'),
     programStartsAt: dayjs().startOf('day').add(3, 'days'),
     programDepletionDateAt: dayjs().startOf('day').add(33, 'days'),
-    taxRatioNumerator: new Decimal('35'),
-    taxRatioDenominator: new Decimal('1000'),
+    taxRatioNumerator: new Decimal('10'),
+    taxRatioDenominator: new Decimal('100'),
     caller: getOwnerAccount(),
     manager: getNamedAccount('steward-role')
   }),
@@ -103,6 +104,7 @@ const stakeUser = createFixtureUtil(
     stakingContract: deployContract(),
     stakingAmount: new Decimal('1000'),
     stakingAccount: getNamedAccount('user-a'),
+    stakingTime: dayjs(),
     minter: getOwnerAccount(),
     claimExistingRewards: false
   }),
@@ -122,6 +124,8 @@ const stakeUser = createFixtureUtil(
       spender: params.stakingContract,
       amount: params.stakingAmount
     });
+
+    await time.setNextBlockTimestamp(params.stakingTime.unix());
 
     await waitForTransaction(
       params.stakingContract
