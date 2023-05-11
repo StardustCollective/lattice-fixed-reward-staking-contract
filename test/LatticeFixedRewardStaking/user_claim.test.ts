@@ -277,8 +277,59 @@ describe('LatticeFixedRewardsStaking :: User Claim', () => {
       });
     });
 
-    describe('Internal acrrue rewards period function', () => {
-      it('Accrues correct rewards period');
+    describe('Internal accrue rewards period function', () => {
+      it('Accrues correct rewards period', async () => {
+        await expect(
+          stakingContract.programLastAccruedRewardsAt()
+        ).to.eventually.equal(stakingParams.programStartsAt.unix());
+
+        await expect(
+          stakingContract.programRewardPerLiquidity()
+        ).to.eventually.equal(0);
+
+        await expect(
+          stakingContract.programRewardRemaining()
+        ).to.eventually.equal(
+          programRewardAmount
+            .times(Decimal.pow(10, rewardTokenDecimals))
+            .toFixed()
+        );
+
+        await time.setNextBlockTimestamp(
+          stakingParams.programStartsAt.add(3, 'days').unix()
+        );
+
+        await waitForTransaction(
+          stakingContract
+            .connect(await getNamedAccount('user-a'))
+            .claimRewards()
+        );
+
+        await expect(
+          stakingContract.programLastAccruedRewardsAt()
+        ).to.eventually.equal(
+          stakingParams.programStartsAt.add(3, 'days').unix()
+        );
+
+        await expect(
+          stakingContract.programRewardPerLiquidity()
+        ).to.eventually.equal(
+          userRewardAmount
+            .times(Decimal.pow(10, rewardTokenDecimals))
+            .times(magnitudeConstant)
+            .div(userStakingAmount.times(Decimal.pow(10, stakingTokenDecimals)))
+            .toFixed()
+        );
+
+        await expect(
+          stakingContract.programRewardRemaining()
+        ).to.eventually.equal(
+          programRewardAmount
+            .minus(userRewardAmount)
+            .times(Decimal.pow(10, rewardTokenDecimals))
+            .toFixed()
+        );
+      });
     });
 
     describe('External available rewards function', () => {

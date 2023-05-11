@@ -19,7 +19,7 @@ import {
 } from '../utils';
 
 describe('LatticeFixedRewardsStaking :: User Stake', () => {
-  let rewardAmount: Decimal;
+  let programRewardAmount: Decimal;
   let stakingParams: Awaited<
     ReturnType<
       typeof LatticeFixedRewardStakingFixtureUtils.deployContract.getDefaultResolvedParams
@@ -28,14 +28,14 @@ describe('LatticeFixedRewardsStaking :: User Stake', () => {
   let stakingContract: LatticeFixedRewardStaking;
 
   const deployContract = async () => {
-    rewardAmount = new Decimal('30000');
+    programRewardAmount = new Decimal('30000');
     stakingParams =
       await LatticeFixedRewardStakingFixtureUtils.deployContract.getDefaultResolvedParams();
     stakingContract =
       await LatticeFixedRewardStakingFixtureUtils.deployContract(stakingParams);
 
     await LatticeFixedRewardStakingFixtureUtils.mintRewards({
-      rewardAmount,
+      rewardAmount: programRewardAmount,
       stakingContract,
       minter: getOwnerAccount(),
       receiver: getOwnerAccount()
@@ -211,7 +211,9 @@ describe('LatticeFixedRewardsStaking :: User Stake', () => {
         it('On no rewards available', async () => {
           await waitForTransaction(
             stakingContract.withdrawProgramRewards(
-              rewardAmount.times(Decimal.pow(10, rewardTokenDecimals)).toFixed()
+              programRewardAmount
+                .times(Decimal.pow(10, rewardTokenDecimals))
+                .toFixed()
             )
           );
 
@@ -314,8 +316,53 @@ describe('LatticeFixedRewardsStaking :: User Stake', () => {
       it('Saves existing rewards');
     });
 
-    describe('Internal acrrue rewards period function', () => {
-      it('Accrues correct rewards period');
+    describe('Internal accrue rewards period function', () => {
+      it('Accrues correct rewards period', async () => {
+        await expect(
+          stakingContract.programLastAccruedRewardsAt()
+        ).to.eventually.equal(stakingParams.programStartsAt.unix());
+
+        await expect(
+          stakingContract.programRewardPerLiquidity()
+        ).to.eventually.equal(0);
+
+        await expect(
+          stakingContract.programRewardRemaining()
+        ).to.eventually.equal(
+          programRewardAmount
+            .times(Decimal.pow(10, rewardTokenDecimals))
+            .toFixed()
+        );
+
+        await time.setNextBlockTimestamp(stakingParams.programStartsAt.unix());
+
+        await waitForTransaction(
+          stakingContract
+            .connect(await getNamedAccount('user-a'))
+            .stake(
+              stakingAmount
+                .times(Decimal.pow(10, stakingTokenDecimals))
+                .toFixed(),
+              false
+            )
+        );
+
+        await expect(
+          stakingContract.programLastAccruedRewardsAt()
+        ).to.eventually.equal(stakingParams.programStartsAt.unix());
+
+        await expect(
+          stakingContract.programRewardPerLiquidity()
+        ).to.eventually.equal(0);
+
+        await expect(
+          stakingContract.programRewardRemaining()
+        ).to.eventually.equal(
+          programRewardAmount
+            .times(Decimal.pow(10, rewardTokenDecimals))
+            .toFixed()
+        );
+      });
     });
   });
 });

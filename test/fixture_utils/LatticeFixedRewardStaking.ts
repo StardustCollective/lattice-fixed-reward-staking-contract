@@ -140,10 +140,45 @@ const stakeUser = createFixtureUtil(
   }
 );
 
+const withdrawUser = createFixtureUtil(
+  () => ({
+    stakingContract: deployContract(),
+    stakingAmount: new Decimal('1000'),
+    stakingAccount: getNamedAccount('user-a'),
+    stakingTime: dayjs(),
+    claimExistingRewards: false,
+    waiveExistingRewards: false
+  }),
+  async (params) => {
+    const stakingToken = await ethers.getContractAt(
+      'TestToken',
+      await params.stakingContract.stakingToken(),
+      await getOwnerAccount()
+    );
+
+    const stakingTokenDecimals = await stakingToken.decimals();
+
+    await time.setNextBlockTimestamp(params.stakingTime.unix());
+
+    await waitForTransaction(
+      params.stakingContract
+        .connect(params.stakingAccount)
+        .withdraw(
+          params.stakingAmount
+            .times(Decimal.pow(10, stakingTokenDecimals))
+            .toFixed(),
+          params.claimExistingRewards,
+          params.waiveExistingRewards
+        )
+    );
+  }
+);
+
 const LatticeFixedRewardStakingFixtureUtils = {
   deployContract,
   mintRewards,
   stakeUser,
+  withdrawUser,
   CONFIGURATION_ROLE_HASH,
   STEWARD_ROLE_HASH
 };
