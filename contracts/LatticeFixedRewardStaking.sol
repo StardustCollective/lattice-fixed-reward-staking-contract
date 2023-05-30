@@ -163,11 +163,15 @@ contract LatticeFixedRewardStaking is ReentrancyGuard, Pausable, AccessControl {
         uint64 _rewardPeriodDuration = _programNextAccruedRewardsAt -
             programLastAccruedRewardsAt;
 
-        uint256 _rewardAmountForPeriod = Math.mulDiv(
-            programRewardRemaining,
-            _rewardPeriodDuration,
-            _rewardRemainingDuration
-        );
+        uint256 _rewardAmountForPeriod = 0;
+
+        if (_rewardRemainingDuration > 0) {
+            _rewardAmountForPeriod = Math.mulDiv(
+                programRewardRemaining,
+                _rewardPeriodDuration,
+                _rewardRemainingDuration
+            );
+        }
 
         uint256 _nextProgramRewardPerLiquidity = programRewardPerLiquidity;
 
