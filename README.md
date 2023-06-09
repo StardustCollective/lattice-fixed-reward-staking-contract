@@ -20,11 +20,13 @@ Both general documentation and rewards distribution algorithm mathematical aspec
 
 The Lattice Fixed Reward Staking Contract was audited in May / 2023 by the [Hacken Team](https://hacken.io/), the overall assessment score was `8.9 / 10`, with a security score of `10 / 10`.
 
- <a href="https://hacken.io/audits/lattice-gateway/?utm_source=client&utm_medium=referral&utm_campaign=badge" target="_blank" style="width: 100%; display: flex; justify-content: space-evenly; align-items: center;">
-    <img src="https://hacken.io/wp-content/uploads/2023/02/ColorFullColorTypeSmartContractAuditBackFilled.png" alt="Proofed by Hacken - Smart contract audit" style="width: 129px; height: 50px;">
-    [x]
-    <img src="https://lattice-exchange-assets.s3.amazonaws.com/common/lattice_gateway_audits.png" alt="Proofed by Hacken - Smart contract audit" style="width: 129px; height: 50px;">
-</a>
+<p align="center" valign="middle">
+    <a href="https://hacken.io/audits/lattice-gateway/?utm_source=client&utm_medium=referral&utm_campaign=badge" target="_blank" >
+        <img src="https://hacken.io/wp-content/uploads/2023/02/ColorFullColorTypeSmartContractAuditBackFilled.png" alt="Proofed by Hacken - Smart contract audit" style="width: 129px; height: 50px;">
+        [x]
+        <img src="https://lattice-exchange-assets.s3.amazonaws.com/common/lattice_gateway_audits.png" alt="Proofed by Hacken - Smart contract audit" style="width: 129px; height: 50px;">
+    </a>
+</p>
 
 ## License
 
