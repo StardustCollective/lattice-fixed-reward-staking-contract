@@ -10,6 +10,10 @@ const TT18_CONTRACT_ADDRESS: Record<string, string> = {
   mumbai: '0x74299a718b2c44483a27325d7725f0b2646de3b1'
 };
 
+const TT8_CONTRACT_ADDRESS: Record<string, string> = {
+  goerli: '0xdad62e7f2da223fee37554974c25c328ff3a79aa'
+};
+
 async function main() {
   if (!['goerli', 'mumbai'].includes(hre.network.name)) {
     throw new Error('Bad network config, must be a testnet');
@@ -36,7 +40,7 @@ async function main() {
     TT18_CONTRACT_ADDRESS[hre.network.name],
     new Decimal(100).times(Decimal.pow(10, testToken18Decimals)).toFixed(),
     dayjs().startOf('hour').unix(),
-    dayjs().startOf('hour').add(1, 'day').unix(),
+    dayjs().startOf('hour').add(1, 'week').unix(),
     '1',
     '100',
     []

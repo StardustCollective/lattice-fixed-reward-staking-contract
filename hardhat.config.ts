@@ -33,7 +33,7 @@ const config: HardhatUserConfig = {
         count: 100
       }
     },
-    ...getNetworkConfig('mainnet', process.env.QUICKNODE_ETHEREUM_MAINNET),
+    ...getNetworkConfig('ethereum', process.env.QUICKNODE_ETHEREUM_MAINNET),
     ...getNetworkConfig('goerli', process.env.QUICKNODE_ETHEREUM_GOERLI),
     ...getNetworkConfig('polygon', process.env.QUICKNODE_POLYGON_MAINNET),
     ...getNetworkConfig('mumbai', process.env.QUICKNODE_POLYGON_MUMBAI)
