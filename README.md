@@ -12,9 +12,9 @@ The Lattice Fixed Reward Staking Contract has been developed as a Solidity smart
 
 Both general documentation and rewards distribution algorithm mathematical aspects can be found over IPFS in the following links.
 
-[General Documentation](https://bafkreic2q6wp3p2qdul2sbnck4hvfxupf2yv7duo556xp5chntzvrhemv4.ipfs.dweb.link/)
+[General Documentation](./docs/general-documentation.pdf)
 
-[Rewards Distribution Algorithm](https://bafkreicztmsrmxh6vq3ftrhgml4uemroyt4244tvwyj7pn3dfevg3pexme.ipfs.dweb.link/)
+[Rewards Distribution Algorithm](./docs/rewards-dist-alg-documentation.pdf)
 
 ## Audits
 
