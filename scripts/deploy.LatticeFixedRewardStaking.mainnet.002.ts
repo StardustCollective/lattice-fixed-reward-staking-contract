@@ -3,6 +3,10 @@ import hre, { ethers } from 'hardhat';
 
 import { generateSolidityStdInputForContract } from '../utils';
 
+/**
+ * Wrapped Ether - Cyberlete LP / Cyberlete
+ */
+
 const STAKING_TOKEN_ADDRESS = '0xdad6a675ff6216c456b467570a7fc4801f495204';
 const REWARD_TOKEN_ADDRESS = '0x6758647a4Cd6b4225b922b456Be5C05359012032';
 const STEWARDS_ADDRESSES = [

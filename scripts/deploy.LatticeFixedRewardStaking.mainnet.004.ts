@@ -4,23 +4,19 @@ import hre, { ethers } from 'hardhat';
 import { generateSolidityStdInputForContract } from '../utils';
 
 /**
- * Cyberlete / Cyberlete
+ * USDC - EURO3 LP / fxA3A
  */
 
-const STAKING_TOKEN_ADDRESS = '0x6758647a4Cd6b4225b922b456Be5C05359012032';
-const REWARD_TOKEN_ADDRESS = '0x6758647a4Cd6b4225b922b456Be5C05359012032';
-const STEWARDS_ADDRESSES = [
-  '0x5A1d6F6051DFB04962bDB78B3AC01F3a6D817aF6',
-  '0x04891a6b907a53e01797404D9af0e605AD260efb',
-  '0x6d64004A60edA219690014Acf783F833f4F868f6'
-];
-const PROGRAM_STARTS_AT_ISO = '2023-06-07T17:00:00.000Z';
-const PROGRAM_ENDS_AT_ISO = '2023-09-07T17:00:00.000Z';
+const STAKING_TOKEN_ADDRESS = '0xcee7ba08eb5c5bbf682edf917bb63e1329b11791';
+const REWARD_TOKEN_ADDRESS = '0x58c7B2828e7F2B2CaA0cC7fEef242fA3196d03df';
+const STEWARDS_ADDRESSES = ['0xC2a8814258F0bb54F9CC1Ec6ACb7a6886097b994'];
+const PROGRAM_STARTS_AT_ISO = '2023-11-27T15:00:00.000Z';
+const PROGRAM_ENDS_AT_ISO = '2023-11-27T18:00:00.000Z';
 const TAX_RATIO_NUM = 5;
 const TAX_RATIO_DEN = 100;
 
 async function main() {
-  if (!['ethereum'].includes(hre.network.name)) {
+  if (!['polygon'].includes(hre.network.name)) {
     throw new Error('Bad network config, must be a mainnet');
   }
 
@@ -58,6 +54,7 @@ async function main() {
 
   const estimatedGas = await signer.estimateGas(trxRequest);
   const gasPrice = await signer.getGasPrice();
+
   const totalEstimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
@@ -78,7 +75,7 @@ async function main() {
     )
   );
 
-  return;
+  //return;
 
   console.log('Sending transaction');
 

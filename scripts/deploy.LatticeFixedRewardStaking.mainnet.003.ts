@@ -3,6 +3,10 @@ import hre, { ethers } from 'hardhat';
 
 import { generateSolidityStdInputForContract } from '../utils';
 
+/**
+ * USDT - JennyCo LP / JennyCo
+ */
+
 const STAKING_TOKEN_ADDRESS = '0xB1588491FC51b72f58E3BFf6F041864C3f4A9B11';
 const REWARD_TOKEN_ADDRESS = '0x8105f88e77a5D102099bf73Db4469d3F1e3B0cD6';
 const STEWARDS_ADDRESSES = [

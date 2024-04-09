@@ -4,18 +4,14 @@ import hre, { ethers } from 'hardhat';
 import { generateSolidityStdInputForContract } from '../utils';
 
 /**
- * Cyberlete / Cyberlete
+ * OBS - WETH LP / OBS
  */
 
-const STAKING_TOKEN_ADDRESS = '0x6758647a4Cd6b4225b922b456Be5C05359012032';
-const REWARD_TOKEN_ADDRESS = '0x6758647a4Cd6b4225b922b456Be5C05359012032';
-const STEWARDS_ADDRESSES = [
-  '0x5A1d6F6051DFB04962bDB78B3AC01F3a6D817aF6',
-  '0x04891a6b907a53e01797404D9af0e605AD260efb',
-  '0x6d64004A60edA219690014Acf783F833f4F868f6'
-];
-const PROGRAM_STARTS_AT_ISO = '2023-06-07T17:00:00.000Z';
-const PROGRAM_ENDS_AT_ISO = '2023-09-07T17:00:00.000Z';
+const STAKING_TOKEN_ADDRESS = '0x6Ca59d4F3FB73B8df30840e27FE6A50e4daE6efE';
+const REWARD_TOKEN_ADDRESS = '0xAFD9268fDfEbEE905F7439b12c943bc18ad293C2';
+const STEWARDS_ADDRESSES = ['0x1b6ab7f289DbFD0c69527004EeE13F715234Ae7f'];
+const PROGRAM_STARTS_AT_ISO = '2024-04-09T19:00:00.000Z';
+const PROGRAM_ENDS_AT_ISO = '2025-04-09T19:00:00.000Z';
 const TAX_RATIO_NUM = 5;
 const TAX_RATIO_DEN = 100;
 
@@ -58,6 +54,7 @@ async function main() {
 
   const estimatedGas = await signer.estimateGas(trxRequest);
   const gasPrice = await signer.getGasPrice();
+
   const totalEstimatedCost = estimatedGas.mul(gasPrice);
 
   console.log(
@@ -66,7 +63,6 @@ async function main() {
         estimatedGas: estimatedGas.toString(),
         gasPrice: gasPrice.toString(),
         totalEstimatedCost: totalEstimatedCost.toString(),
-
         gasPriceGwei: ethers.utils.formatUnits(gasPrice, 'gwei'),
         totalEstimatedCostEth: ethers.utils.formatUnits(
           totalEstimatedCost,
@@ -77,8 +73,6 @@ async function main() {
       2
     )
   );
-
-  return;
 
   console.log('Sending transaction');
 
